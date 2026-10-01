@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Retro LCD Weather</title>
+  
+  <!-- Configurazione PWA & Schermo Intero per iOS / Android -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#c5c2a8">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=VT323&family=Silkscreen:wght@400;700&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --bg-color: #c5c2a8;      /* Colore display LCD / Game Boy */
+      --grid-line: #b6b39a;     /* Griglia millimetrata */
+      --ink: #1a1a17;           /* Pixel scuri LCD */
+      --ink-dim: #5c5a4f;       /* Pixel attenuati / inattivi */
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-font-smoothing: none;
+    }
+
+    body {
+      background-color: var(--bg-color);
+      /* Griglia millimetrata di sfondo */
+      background-image: 
+        linear-gradient(var(--grid-line) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+      background-size: 16px 16px;
+      color: var(--ink);
+      font-family: 'Silkscreen', 'VT323', monospace;
+      padding: env(safe-area-inset-top, 12px) 16px env(safe-area-inset-bottom, 12px);
+      display: flex;
+      justify-content: center;
+      min-height: 100vh;
+      user-select: none;
+    }
+
+    .device-container {
+      width: 100%;
+      max-width: 420px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding-top: 10px;
+    }
+
+    /* Linee separatrici punteggiate */
+    .dotted-divider {
+      border: none;
+      border-bottom: 2px dotted var(--ink);
+      margin: 6px 0;
+      width: 100%;
+    }
+
+    /* HEADER */
+    .header-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.85rem;
+      font-weight: 700;
+      letter-spacing: 1px;
+      cursor: pointer;
+    }
+
+    .city-btn {
+      text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+
+    /* HERO: TEMPERATURA E ICONA PRINCIPALE */
+    .hero-section {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 4px 0;
+    }
+
+    .hero-icon {
+      width: 140px;
+      height: 140px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .hero-details {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      text-align: right;
+    }
+
+    .current-temp {
+      font-size: 3.2rem;
+      line-height: 1;
+      font-family: 'VT323', monospace;
+      font-weight: bold;
+      margin-bottom: 8px;
+    }
+
+    .metric-rows {
+      font-size: 0.8rem;
+      line-height: 1.4;
+      white-space: pre;
+    }
+
+    /* FORECAST 3-SLOT */
+    .forecast-triad {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      text-align: center;
+      font-size: 0.75rem;
+      position: relative;
+    }
+
+    .triad-col {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .triad-col:not(:last-child) {
+      border-right: 1.5px dotted var(--ink);
+    }
+
+    .triad-icon {
+      width: 54px;
+      height: 54px;
+      margin: 2px 0;
+    }
+
+    /* BARRE DI MISURAZIONE */
+    .bars-section {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      font-size: 0.82rem;
+      letter-spacing: 0.5px;
+    }
+
+    .bar-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .bar-label {
+      width: 70px;
+    }
+
+    .bar-graph {
+      font-family: 'VT323', monospace;
+      font-size: 1.25rem;
+      letter-spacing: 1px;
+    }
+
+    .bar-value {
+      width: 60px;
+      text-align: right;
+    }
+
+    /* FOOTER METRICS */
+    .astro-footer {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      font-size: 0.68rem;
+      line-height: 1.45;
+      padding-top: 4px;
+    }
+
+    .astro-col {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .astro-col:first-child {
+      border-right: 1.5px dotted var(--ink);
+      padding-right: 8px;
+    }
+
+    /* MODALE RICERCA LUOGO */
+    .modal-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(26, 26, 23, 0.6);
+      align-items: center;
+      justify-content: center;
+      z-index: 999;
+      padding: 16px;
+    }
+
+    .modal-window {
+      background: var(--bg-color);
+      border: 3px solid var(--ink);
+      padding: 16px;
+      width: 100%;
+      max-width: 340px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .modal-input {
+      background: transparent;
+      border: 2px solid var(--ink);
+      padding: 8px;
+      font-family: inherit;
+      font-size: 0.9rem;
+      color: var(--ink);
+      outline: none;
+    }
+
+    .modal-btn {
+      background: var(--ink);
+      color: var(--bg-color);
+      border: none;
+      padding: 8px;
+      font-family: inherit;
+      font-size: 0.8rem;
+      cursor: pointer;
+      font-weight: bold;
+    }
+
+    .modal-btn.secondary {
+      background: transparent;
+      color: var(--ink);
+      border: 2px solid var(--ink);
+    }
+
+    .search-results {
+      max-height: 140px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .search-item {
+      padding: 6px;
+      border-bottom: 1px dotted var(--ink);
+      cursor: pointer;
+      font-size: 0.75rem;
+    }
+    .search-item:hover {
+      background: var(--ink);
+      color: var(--bg-color);
+    }
+  </style>
+</head>
+<body>
+
+  <div class="device-container">
+    <!-- Header: Data e Città (cliccabile per cambiare) -->
+    <div class="header-bar" onclick="openSearchModal()">
+      <span id="date-display">--.--</span>
+      <span class="city-btn" id="city-display">SELECT CITY</span>
+      <span id="header-temp">TEMP --</span>
+    </div>
+
+    <hr class="dotted-divider">
+
+    <!-- Sezione Principale: Icona + Gradi Attuali + Dati Rapidi -->
+    <div class="hero-section">
+      <div class="hero-icon" id="hero-icon-svg">
+        <!-- SVG generato via JS -->
+      </div>
+      <div class="hero-details">
+        <div class="current-temp" id="current-temp">+--°C</div>
+        <div class="metric-rows">
+FEELS : <span id="m-feels">--</span> °C
++6H   : <span id="m-6h">--</span> °C
+WIND  : <span id="m-wind">--</span> M/S
+RH    : <span id="m-rh">--</span> %
+PRESS : <span id="m-press">--</span> HPA</div>
+      </div>
+    </div>
+
+    <hr class="dotted-divider">
+
+    <!-- Previsione 3 Slot Orari -->
+    <div class="forecast-triad">
+      <div class="triad-col">
+        <span id="slot-0-time">--:--</span>
+        <div class="triad-icon" id="slot-0-icon"></div>
+        <span id="slot-0-temp">--°C</span>
+      </div>
+      <div class="triad-col">
+        <span id="slot-1-time">--:--</span>
+        <div class="triad-icon" id="slot-1-icon"></div>
+        <span id="slot-1-temp">--°C</span>
+      </div>
+      <div class="triad-col">
+        <span id="slot-2-time">--:--</span>
+        <div class="triad-icon" id="slot-2-icon"></div>
+        <span id="slot-2-temp">--°C</span>
+      </div>
+    </div>
+
+    <hr class="dotted-divider">
+
+    <!-- Grafici a Barre Monospazio -->
+    <div class="bars-section">
+      <div class="bar-row">
+        <span class="bar-label">TEMP</span>
+        <span class="bar-graph" id="bar-temp">[▯▯▯▯▯▯▯▯]</span>
+        <span class="bar-value" id="val-temp">--°C</span>
+      </div>
+      <div class="bar-row">
+        <span class="bar-label">HUMID</span>
+        <span class="bar-graph" id="bar-humid">[▯▯▯▯▯▯▯▯]</span>
+        <span class="bar-value" id="val-humid">--%</span>
+      </div>
+      <div class="bar-row">
+        <span class="bar-label">PRESS</span>
+        <span class="bar-graph" id="bar-press">[▯▯▯▯▯▯▯▯]</span>
+        <span class="bar-value" id="val-press">----</span>
+      </div>
+      <div class="bar-row">
+        <span class="bar-label">WIND</span>
+        <span class="bar-graph" id="bar-wind">[▯▯▯▯▯▯▯▯]</span>
+        <span class="bar-value" id="val-wind">--</span>
+      </div>
+      <div class="bar-row">
+        <span class="bar-label">CLOUD</span>
+        <span class="bar-graph" id="bar-cloud">[▯▯▯▯▯▯▯▯]</span>
+        <span class="bar-value" id="val-cloud">--%</span>
+      </div>
+      <div class="bar-row">
+        <span class="bar-label">RAIN P</span>
+        <span class="bar-graph" id="bar-rain">[▯▯▯▯▯▯▯▯]</span>
+        <span class="bar-value" id="val-rain">--%</span>
+      </div>
+    </div>
+
+    <hr class="dotted-divider">
+
+    <!-- Dati Astronomici e Suolo -->
+    <div class="astro-footer">
+      <div class="astro-col">
+        <div>MOONRISE  : <span id="m-moonrise">--:--</span></div>
+        <div>MOONSET   : <span id="m-moonset">--:--</span></div>
+        <div>MOON PHASE: <span id="m-moonphase">0.00</span></div>
+        <div>SOIL 0CM  : <span id="m-soil0">--</span> °C</div>
+        <div>SOIL 6CM  : <span id="m-soil6">--</span> °C</div>
+      </div>
+      <div class="astro-col">
+        <div>DAY/NIGHT  : <span id="m-isday">DAY</span></div>
+        <div>SUNSHINE   : <span id="m-sunshine">--:--</span></div>
+        <div>SUNRISE    : <span id="m-sunrise">--:--</span></div>
+        <div>SUNSET     : <span id="m-sunset">--:--</span></div>
+        <div>DAY LENGTH : <span id="m-daylen">--:--</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modale Selezione Posizione -->
+  <div class="modal-backdrop" id="loc-modal">
+    <div class="modal-window">
+      <div style="font-weight: bold; font-size: 0.9rem;">SET LOCATION</div>
+      <button class="modal-btn" onclick="useGpsLocation()">AUTO GPS LOCATION</button>
+      <input type="text" class="modal-input" id="search-input" placeholder="Search city (e.g. Rome, London)...">
+      <div class="search-results" id="search-results"></div>
+      <button class="modal-btn secondary" onclick="closeSearchModal()">CANCEL</button>
+    </div>
+  </div>
+
+  <script>
+    /* ========================================================
+       CONFIGURAZIONE API OPEN-METEO
+       Inserisci qui la tua chiave API se possiedi una licenza.
+       Se vuota (""), l'app utilizzerà le API aperte e gratuite.
+    ======================================================== */
+    const OPEN_METEO_API_KEY = ""; // <-- Inserisci la tua API Key qui se ne hai una
+
+    function getApiEndpoint(baseUrl) {
+      if (!OPEN_METEO_API_KEY) return baseUrl;
+      // Con licenza commerciale l'host cambia in customer-api.open-meteo.com
+      const commercialUrl = baseUrl.replace("api.open-meteo.com", "customer-api.open-meteo.com");
+      const joinChar = commercialUrl.includes("?") ? "&" : "?";
+      return `${commercialUrl}${joinChar}apikey=${OPEN_METEO_API_KEY}`;
+    }
+
+    // Costruzione Barre Stile LCD: [▮▮▮▯▯▯]
+    function buildBar(val, min, max, totalBlocks = 8) {
+      const clamped = Math.max(min, Math.min(max, val));
+      const ratio = (clamped - min) / (max - min);
+      const filled = Math.round(ratio * totalBlocks);
+      const empty = totalBlocks - filled;
+      return `[${'▮'.repeat(filled)}${'▯'.repeat(empty)}]`;
+    }
+
+    // Formattazione data (es. 7.12)
+    function updateDateDisplay() {
+      const now = new Date();
+      const d = now.getDate();
+      const m = now.getMonth() + 1;
+      document.getElementById('date-display').innerText = `${d}.${m < 10 ? '0' + m : m}`;
+    }
+
+    // ICONOGRAFIA PIXEL ART IN SVG MONOCROMATICO
+    function getPixelIcon(code, isDay = 1, size = 64) {
+      const color = "var(--ink)";
+      // Mappatura codici WMO: Sole / Nuvolo / Pioggia / Temporale / Neve
+      if (code === 0 && isDay) {
+        // Sole pixel
+        return `<svg width="${size}" height="${size}" viewBox="0 0 16 16" fill="${color}">
+          <rect x="7" y="1" width="2" height="2"/><rect x="7" y="13" width="2" height="2"/>
+          <rect x="1" y="7" width="2" height="2"/><rect x="13" y="7" width="2" height="2"/>
+          <rect x="3" y="3" width="2" height="2"/><rect x="11" y="3" width="2" height="2"/>
+          <rect x="3" y="11" width="2" height="2"/><rect x="11" y="11" width="2" height="2"/>
+          <rect x="5" y="5" width="6" height="6"/>
+        </svg>`;
+      } else if (code === 0 && !isDay) {
+        // Luna pixel
+        return `<svg width="${size}" height="${size}" viewBox="0 0 16 16" fill="${color}">
+          <rect x="6" y="2" width="6" height="2"/><rect x="4" y="4" width="4" height="2"/>
+          <rect x="3" y="6" width="3" height="4"/><rect x="4" y="10" width="4" height="2"/>
+          <rect x="6" y="12" width="6" height="2"/><rect x="10" y="4" width="3" height="8"/>
+        </svg>`;
+      } else if (code >= 1 && code <= 3) {
+        // Nuvola / Parzialmente nuvoloso
+        return `<svg width="${size}" height="${size}" viewBox="0 0 16 16" fill="${color}">
+          <rect x="5" y="4" width="6" height="2"/><rect x="3" y="6" width="10" height="2"/>
+          <rect x="2" y="8" width="12" height="4"/>
+        </svg>`;
+      } else if ((code >= 51 && code <= 67) || (code >= 80 && code <= 82)) {
+        // Pioggia pixel
+        return `<svg width="${size}" height="${size}" viewBox="0 0 16 16" fill="${color}">
+          <rect x="5" y="3" width="6" height="2"/><rect x="3" y="5" width="10" height="2"/>
+          <rect x="2" y="7" width="12" height="3"/>
+          <rect x="4" y="11" width="1" height="2"/><rect x="7" y="11" width="1" height="2"/><rect x="10" y="11" width="1" height="2"/>
+          <rect x="5" y="14" width="1" height="2"/><rect x="8" y="14" width="1" height="2"/><rect x="11" y="14" width="1" height="2"/>
+        </svg>`;
+      } else if (code >= 95) {
+        // Temporale
+        return `<svg width="${size}" height="${size}" viewBox="0 0 16 16" fill="${color}">
+          <rect x="4" y="3" width="8" height="2"/><rect x="2" y="5" width="12" height="3"/>
+          <rect x="8" y="8" width="2" height="3"/><rect x="6" y="10" width="4" height="1"/>
+          <rect x="5" y="11" width="2" height="3"/>
+        </svg>`;
+      } else {
+        // Neve / Nebbia (Default Nuvola)
+        return `<svg width="${size}" height="${size}" viewBox="0 0 16 16" fill="${color}">
+          <rect x="4" y="4" width="8" height="2"/><rect x="2" y="6" width="12" height="4"/>
+          <rect x="4" y="11" width="2" height="2"/><rect x="10" y="11" width="2" height="2"/>
+        </svg>`;
+      }
+    }
+
+    // CHIAMATA API OPEN-METEO
+    async function loadWeatherData(lat, lon, locationLabel) {
+      try {
+        const url = getApiEndpoint(
+          `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,weather_code,cloud_cover,surface_pressure,wind_speed_10m,soil_temperature_0_to_6cm&hourly=temperature_2m,weather_code,precipitation_probability&daily=sunrise,sunset,daylight_duration,sunshine_duration&timezone=auto`
+        );
+
+        const res = await fetch(url);
+        const data = await res.json();
+        renderWeather(data, locationLabel);
+      } catch (err) {
+        alert("Errore nel recupero dati Open-Meteo: " + err.message);
+      }
+    }
+
+    function renderWeather(data, label) {
+      const cur = data.current;
+      const hourly = data.hourly;
+      const daily = data.daily;
+
+      // Header
+      document.getElementById('city-display').innerText = label.toUpperCase();
+      document.getElementById('header-temp').innerText = `TEMP ${Math.round(cur.temperature_2m)}°`;
+
+      // Hero
+      document.getElementById('current-temp').innerText = `${cur.temperature_2m > 0 ? '+' : ''}${Math.round(cur.temperature_2m)}°C`;
+      document.getElementById('hero-icon-svg').innerHTML = getPixelIcon(cur.weather_code, cur.is_day, 120);
+
+      // Hero dettagli
+      document.getElementById('m-feels').innerText = (cur.apparent_temperature > 0 ? '+' : '') + Math.round(cur.apparent_temperature);
+      
+      // Calcola temperatura tra 6 ore
+      const nowHour = new Date().getHours();
+      const in6hTemp = hourly.temperature_2m[nowHour + 6] ?? cur.temperature_2m;
+      document.getElementById('m-6h').innerText = (in6hTemp > 0 ? '+' : '') + Math.round(in6hTemp);
+      
+      document.getElementById('m-wind').innerText = (cur.wind_speed_10m / 3.6).toFixed(1); // conversione m/s
+      document.getElementById('m-rh').innerText = Math.round(cur.relative_humidity_2m);
+      document.getElementById('m-press').innerText = Math.round(cur.surface_pressure);
+
+      // Previsione 3 Slot Orari
+      const slots = [nowHour + 2, nowHour + 5, nowHour + 8];
+      slots.forEach((targetHour, idx) => {
+        const h = targetHour % 24;
+        const timeStr = `${h < 10 ? '0' + h : h}:00`;
+        const temp = Math.round(hourly.temperature_2m[targetHour] || 0);
+        const code = hourly.weather_code[targetHour] || 0;
+
+        document.getElementById(`slot-${idx}-time`).innerText = timeStr;
+        document.getElementById(`slot-${idx}-temp`).innerText = `${temp > 0 ? '+' : ''}${temp}°C`;
+        document.getElementById(`slot-${idx}-icon`).innerHTML = getPixelIcon(code, 1, 48);
+      });
+
+      // Barre Monospazio
+      const tempVal = Math.round(cur.temperature_2m);
+      document.getElementById('bar-temp').innerText = buildBar(tempVal, -5, 40);
+      document.getElementById('val-temp').innerText = `${tempVal}°C`;
+
+      const humidVal = Math.round(cur.relative_humidity_2m);
+      document.getElementById('bar-humid').innerText = buildBar(humidVal, 0, 100);
+      document.getElementById('val-humid').innerText = `${humidVal}%`;
+
+      const pressVal = Math.round(cur.surface_pressure);
+      document.getElementById('bar-press').innerText = buildBar(pressVal, 960, 1040);
+      document.getElementById('val-press').innerText = `${pressVal}`;
+
+      const windVal = parseFloat((cur.wind_speed_10m / 3.6).toFixed(1));
+      document.getElementById('bar-wind').innerText = buildBar(windVal, 0, 15);
+      document.getElementById('val-wind').innerText = `${windVal}`;
+
+      const cloudVal = Math.round(cur.cloud_cover);
+      document.getElementById('bar-cloud').innerText = buildBar(cloudVal, 0, 100);
+      document.getElementById('val-cloud').innerText = `${cloudVal}%`;
+
+      const rainProb = hourly.precipitation_probability ? hourly.precipitation_probability[nowHour] : 0;
+      document.getElementById('bar-rain').innerText = buildBar(rainProb, 0, 100);
+      document.getElementById('val-rain').innerText = `${rainProb}%`;
+
+      // Footer Astronomico
+      document.getElementById('m-isday').innerText = cur.is_day ? 'DAY' : 'NIGHT';
+      document.getElementById('m-sunrise').innerText = daily.sunrise[0]?.split('T')[1] || '--:--';
+      document.getElementById('m-sunset').innerText = daily.sunset[0]?.split('T')[1] || '--:--';
+
+      const daySecs = daily.daylight_duration[0] || 0;
+      const hours = Math.floor(daySecs / 3600);
+      const mins = Math.floor((daySecs % 3600) / 60);
+      document.getElementById('m-daylen').innerText = `${hours}:${mins < 10 ? '0' + mins : mins}`;
+
+      const sunSecs = daily.sunshine_duration[0] || 0;
+      const sHours = Math.floor(sunSecs / 3600);
+      const sMins = Math.floor((sunSecs % 3600) / 60);
+      document.getElementById('m-sunshine').innerText = `${sHours}:${sMins < 10 ? '0' + sMins : sMins}`;
+
+      // Temperatura suolo stimata
+      const soilVal = cur.soil_temperature_0_to_6cm ?? cur.temperature_2m - 2;
+      document.getElementById('m-soil0').innerText = (soilVal > 0 ? '+' : '') + Math.round(soilVal);
+      document.getElementById('m-soil6').innerText = (soilVal - 1 > 0 ? '+' : '') + Math.round(soilVal - 1);
+    }
+
+    // GESTIONE POSIZIONE
+    function initLocation() {
+      updateDateDisplay();
+      const saved = localStorage.getItem('retro_weather_loc');
+      if (saved) {
+        const { lat, lon, label } = JSON.parse(saved);
+        loadWeatherData(lat, lon, label);
+      } else {
+        useGpsLocation();
+      }
+    }
+
+    function useGpsLocation() {
+      closeSearchModal();
+      if (!navigator.geolocation) {
+        loadWeatherData(51.5074, -0.1278, "LONDON / UK");
+        return;
+      }
+      navigator.geolocation.getCurrentPosition(
+        async (pos) => {
+          const lat = pos.coords.latitude;
+          const lon = pos.coords.longitude;
+          let label = "MY LOCATION";
+          try {
+            // Geocoding inverso approssimato Open-Meteo
+            const r = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${lat.toFixed(2)},${lon.toFixed(2)}&count=1`);
+            const d = await r.json();
+            if (d.results?.[0]) label = `${d.results[0].name} / ${d.results[0].country_code}`;
+          } catch(e) {}
+          saveAndLoad(lat, lon, label);
+        },
+        () => {
+          // Fallback predefinito se l'utente rifiuta la geolocalizzazione
+          loadWeatherData(51.5074, -0.1278, "LONDON / UK");
+        }
+      );
+    }
+
+    function saveAndLoad(lat, lon, label) {
+      localStorage.setItem('retro_weather_loc', JSON.stringify({ lat, lon, label }));
+      loadWeatherData(lat, lon, label);
+    }
+
+    // MODALE RICERCA CITTÀ
+    const modal = document.getElementById('loc-modal');
+    const searchInput = document.getElementById('search-input');
+    const searchResults = document.getElementById('search-results');
+
+    function openSearchModal() {
+      modal.style.display = 'flex';
+      searchInput.value = '';
+      searchResults.innerHTML = '';
+      searchInput.focus();
+    }
+
+    function closeSearchModal() {
+      modal.style.display = 'none';
+    }
+
+    let debounceTimer;
+    searchInput.addEventListener('input', () => {
+      clearTimeout(debounceTimer);
+      const query = searchInput.value.trim();
+      if (query.length < 2) {
+        searchResults.innerHTML = '';
+        return;
+      }
+      debounceTimer = setTimeout(async () => {
+        try {
+          const res = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query)}&count=5&language=it`);
+          const data = await res.json();
+          searchResults.innerHTML = '';
+          if (data.results) {
+            data.results.forEach(item => {
+              const div = document.createElement('div');
+              div.className = 'search-item';
+              const label = `${item.name} / ${item.country_code || ''}`;
+              div.innerText = `${label} (${item.admin1 || ''})`;
+              div.onclick = () => {
+                saveAndLoad(item.latitude, item.longitude, label);
+                closeSearchModal();
+              };
+              searchResults.appendChild(div);
+            });
+          }
+        } catch(e) {}
+      }, 350);
+    });
+
+    // Registrazione Manifest PWA dinamico
+    const manifestBlob = new Blob([JSON.stringify({
+      name: "Retro Weather LCD",
+      short_name: "Weather",
+      start_url: ".",
+      display: "standalone",
+      background_color: "#c5c2a8",
+      theme_color: "#c5c2a8"
+    })], { type: 'application/json' });
+    const manifestLink = document.createElement('link');
+    manifestLink.rel = 'manifest';
+    manifestLink.href = URL.createObjectURL(manifestBlob);
+    document.head.appendChild(manifestLink);
+
+    // Avvio
+    initLocation();
+  </script>
+</body>
+</html>
